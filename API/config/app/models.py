@@ -2,18 +2,22 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
-
 class Student(models.Model):
     first_name = models.CharField(max_length=20)
     last_name = models.CharField(max_length=25)
     student_id = models.CharField(max_length=10, unique=True)
     courses = models.ManyToManyField('Course', related_name='enrolled_students', blank=True)
-    balance = models.CharField(max_length=15) 
+    balance = models.CharField(max_length=15)
     total_credits_taken = models.IntegerField()
     term = models.ForeignKey('Term', on_delete=models.CASCADE)
 
     def __str__(self):
         return self.student_id
+
+    def get_passed_courses(self):
+        passed_courses = self.courses.filter(grade__grade__gte=10)
+        course_numbers = passed_courses.values_list('code', flat=True)
+        return course_numbers
 
 
 class Professor(models.Model):
@@ -43,7 +47,8 @@ class Term(models.Model):
 class Food(models.Model):
     name = models.CharField(max_length=100)
     price = models.IntegerField()
-    meal = models.CharField(choices=(('lunch', 'lunch'), ('breakfast', 'breakfast'), ('dinner', 'dinner')), max_length=15)
+    meal = models.CharField(choices=(('lunch', 'lunch'), ('breakfast', 'breakfast'), ('dinner', 'dinner')),
+                            max_length=15)
     day = models.CharField(max_length=15, choices=[
         ('Saturday', 'Saturday'),
         ('Sunday', 'Sunday'),
@@ -69,8 +74,9 @@ class FoodReservation(models.Model):
             student = self.student
             student.balance -= self.food.price
             student.save()
-        
+
         super().save(*args, **kwargs)
+
 
 class ProfessorRating(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
@@ -114,41 +120,33 @@ class Course(models.Model):
                 student=student,
                 course=self,
                 date=self.get_exam_date(),
-                room=self.get_exam_room(),  #
+                room=self.get_exam_room(),
                 seat_number=self.get_seat_number(),
                 description=self.get_exam_description(),
             )
             examination_schedule.save()
 
     def get_exam_date(self):
-        # Define your logic to determine the exam date
-        # For example, if the course starts on Monday, the exam can be scheduled on the following Saturday
-        start_date = self.start_date  # Replace with the actual field representing the course start date
-        exam_date = start_date + timedelta(days=5)  # Adjust the number of days as per your requirement
+        exam_schedule = ExaminationSchedule.objects.get(course=self)
+        exam_date = exam_schedule.date
         return exam_date
 
     def get_exam_room(self):
-        # Define your logic to determine the exam room
-        # For example, you can assign a specific room based on the course department
-        department = self.professor.department  # Replace with the actual field representing the course professor's department
-        if department == 'Computer Science':
-            room = Room.objects.get(name='CS101')  # Replace with the actual room object
-        else:
-            room = Room.objects.get(name='Other Room')  # Replace with the actual room object
+        exam_schedule = ExaminationSchedule.objects.get(course=self)
+        room = exam_schedule.room
         return room
 
     def get_seat_number(self):
-        # Define your logic to determine the seat number
-        # For example, you can assign a unique seat number for each student in the course
         enrolled_students = self.students.all()
-        seat_number = enrolled_students.count() + 1  # Assign a seat number incrementally
+        seat_number = enrolled_students.count() + 1
         return seat_number
 
     def get_exam_description(self):
-        # Define your logic to determine the exam description
-        # For example, you can provide details about the exam format or topics covered
-        description = f"Final exam for {self.title}"  # Modify as per your requirement
+        exam_schedule = ExaminationSchedule.objects.get(course=self)
+        description = exam_schedule.description
+
         return description
+
 
 class Day(models.Model):
     name = models.CharField(max_length=10, choices=[
@@ -210,7 +208,7 @@ class CourseRegistration(models.Model):
         super().save(*args, **kwargs)
 
         student = self.student
-        student.term.last().credits_taken +=self.course.credits
+        student.term.last().credits_taken += self.course.credits
         student.save()
 
         # Update examination schedule before selecting a course
@@ -225,7 +223,6 @@ class CourseRegistration(models.Model):
         super().delete(*args, **kwargs)
 
     def update_examination_schedule(self, student):
-
         courses_taken = student.courses_taken.all()
 
         student.examinationschedule_set.all().delete()
@@ -281,6 +278,7 @@ class Grade(models.Model):
             student.overall_gpa = overall_gpa
             student.save()
 
+
 class Announcement(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     title = models.CharField(max_length=100)
@@ -312,4 +310,3 @@ class Messages(models.Model):
     subject = models.CharField(max_length=100)
     content = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
-
