@@ -1,4 +1,3 @@
-
 create trigger average
     after update on main.class_has_student
     for each row
@@ -51,8 +50,8 @@ create trigger add_course_schedule
 create trigger add_course_class
     after insert on main.class_has_student
     for each row
-    insert into main.class_has_final_schedule(class_course_course_id, class_course_year_number, class_course_semester, class_class_group, final_schedule_student_student_id)
-    value (NEW.class_course_course_id, NEW.class_course_year_number, NEW.class_course_semester, NEW.class_class_group, NEW.student_student_id);
+    insert into main.class_has_final_schedule(class_course_course_id, class_course_year_number, class_course_semester, class_class_group, final_schedule_student_student_id,final_date)
+    value (NEW.class_course_course_id, NEW.class_course_year_number, NEW.class_course_semester, NEW.class_class_group, NEW.student_student_id,(select final_time from main.course where NEW.class_course_course_id=main.course.course_id and NEW.class_course_year_number=main.course.year_number and NEW.class_course_semester=main.course.semester));
 
 
 
